@@ -80,7 +80,8 @@ class SongsController extends AbstractController
             $body = $res->getBody()->getContents();
             $body = json_decode($body, true);
             if ($res->getStatusCode() == 200) {
-                if ($body['data'][0]['code'] == 200) {
+                //freeTrialInfo试听信息，为null是非试听
+                if ($body['data'][0]['code'] == 200 && empty($body['data'][0]['freeTrialInfo'])) {
                     $playable = true;
                 }
             }
@@ -90,6 +91,7 @@ class SongsController extends AbstractController
                     'message' => 'ok',
                 ])->withStatus(200);
             }
+            //TODO:搜索其它源
             return $this->response->json([
                 'success' => false,
                 'message' => '亲爱的,暂无版权',
