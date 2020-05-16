@@ -70,7 +70,7 @@ class ApiAspect extends AbstractAspect
         SendController::class,
         SharesController::class,
         SimiController::class,
-        SongsController::class,
+//        SongsController::class,
         ToplistsController::class,
         TopsController::class,
         UsersController::class,
@@ -108,6 +108,10 @@ class ApiAspect extends AbstractAspect
         $keyStr = $url . '::';
         foreach ($params as $key => $val) {
             $keyStr = $keyStr . $key . ':' . $val . '::';
+        }
+        $cookies = $this->request->getCookieParams();
+        foreach ($cookies as $key => $cookie) {
+            $keyStr = $keyStr . $key . ':' . $cookie . '::';
         }
         $key = md5($keyStr);
         //判断是否走缓存
