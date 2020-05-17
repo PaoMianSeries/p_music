@@ -51,11 +51,11 @@ RUN set -ex \
     && rm -rf /var/cache/apk/* /tmp/* /usr/share/man \
     && echo -e "\033[42;37m Build Completed :).\033[0m\n"
 
-#RUN composer install --no-dev \
-#    && composer dump-autoload -o \
-#    && php /opt/www/bin/hyperf.php di:init-proxy
+COPY . /opt/www
 
-#COPY . /opt/www
+RUN composer install --no-dev \
+   && composer dump-autoload -o
+#    && php /opt/www/bin/hyperf.php di:init-proxy
 
 WORKDIR /opt/www
 
