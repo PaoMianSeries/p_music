@@ -53,6 +53,7 @@ RUN set -ex \
     # 命令行工具
     && apk add zsh curl wget vim git \
     && wget https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh -O - | zsh || true \
+    && echo 'ZSH_THEME="random"' > ~/.zshrc \
     # ---------- clear works ----------
     && rm -rf /var/cache/apk/* /tmp/* /usr/share/man \
     && echo -e "\033[42;37m Build Completed :).\033[0m\n"
