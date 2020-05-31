@@ -284,10 +284,12 @@ class SongsController extends AbstractController
                 $body = json_decode($body, true);
                 $song_id = 0;
                 if (isset($body['result'], $body['result']['song_info'])) {
-                    foreach ($body['result']['song_info']['song_list'] as $item) {
-                        if (mb_strpos($item['title'], $name) !== false) {
-                            $song_id = $item['song_id'];
-                            break;
+                    if (isset($body['result']['song_info']['song_list']) && is_array($body['result']['song_info']['song_list'])) {
+                        foreach ($body['result']['song_info']['song_list'] as $item) {
+                            if (mb_strpos($item['title'], $name) !== false) {
+                                $song_id = $item['song_id'];
+                                break;
+                            }
                         }
                     }
                 }
