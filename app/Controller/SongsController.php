@@ -243,9 +243,9 @@ class SongsController extends AbstractController
             }
             if (!empty($res['song']['url'])) {
                 //写缓存
-                $this->cache->set($id . '_song_url', $res, 60 * 60 * 24);
+                $this->cache->set($id . '_song_url', $res, 60 * 30);
             } else {
-                $this->cache->set($id . '_song_url', $res, 10);
+                $this->cache->set($id . '_song_url', $res, 5);
             }
         }
         return $res['song']['url'] ?? '';
