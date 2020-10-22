@@ -42,9 +42,9 @@ class SongsController extends AbstractController
         $data['br'] = (int) ($validated_data['br'] ?? 999000);
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/api/song/enhance/player/url',
+            'https://interface3.music.163.com/eapi/song/enhance/player/url',
             $data,
-            ['crypto' => 'linuxapi', 'cookie' => $cookie]
+            ['crypto' => 'eapi', 'cookie' => $cookie, 'url' => '/api/song/enhance/player/url']
         );
     }
 
@@ -134,6 +134,37 @@ class SongsController extends AbstractController
             'https://music.163.com/weapi/v3/song/detail',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+        );
+    }
+
+    /**
+     * 调整歌曲顺序.
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function updateOrder()
+    {
+        $validator = $this->validationFactory->make($this->request->all(), [
+            'pid' => 'required',
+            'ids' => 'required',
+        ]);
+        if ($validator->fails()) {
+            // Handle exception
+            $errorMessage = $validator->errors()->first();
+            return $this->returnMsg(422, $errorMessage);
+        }
+        $validated_data = $validator->validated();
+
+        $data['pid'] = $validated_data['pid'];
+        $data['trackIds'] = $validated_data['ids'];
+        $data['op'] = 'update';
+
+        return $this->createCloudRequest(
+            'POST',
+            'http://interface.music.163.com/api/playlist/manipulate/tracks',
+            $data,
+            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams(), 'url' => '/api/playlist/desc/update']
         );
     }
 }

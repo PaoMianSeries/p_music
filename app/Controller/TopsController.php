@@ -11,6 +11,8 @@ declare(strict_types=1);
  */
 namespace App\Controller;
 
+use Carbon\Carbon;
+
 class TopsController extends AbstractController
 {
     /**
@@ -51,7 +53,7 @@ class TopsController extends AbstractController
         $data['total'] = true;
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/weapi/playlist/highquality/list',
+            'https://music.163.com/api/playlist/highquality/list',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
@@ -84,14 +86,17 @@ class TopsController extends AbstractController
      */
     public function album()
     {
-        $data['area'] = $this->request->input('type', 'ALL'); // ALL,ZH,EA,KR,JP
+        $data['area'] = $this->request->input('area', 'ALL'); // ALL,ZH,EA,KR,JP
         $data['limit'] = $this->request->input('limit', 50);
         $data['offset'] = $this->request->input('offset', 0);
-        $data['total'] = true;
+        $data['type'] = $this->request->input('type', 'new');
+        $data['year'] = $this->request->input('year', Carbon::now()->year);
+        $data['month'] = $this->request->input('month', Carbon::now()->month);
+        $data['total'] = $data['rcmd'] = false;
 
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/weapi/album/new',
+            'https://music.163.com/api/discovery/new/albums/area',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
@@ -145,64 +150,26 @@ class TopsController extends AbstractController
      */
     public function list()
     {
+        $cookie = $this->request->getCookieParams();
+        unset($cookie['p_ip'], $cookie['p_ua']);
+        $cookie['os'] = 'pc';
         $validator = $this->validationFactory->make($this->request->all(), [
-            'idx' => 'required',
+            'id' => '',
         ]);
         if ($validator->fails()) {
             // Handle exception
             $errorMessage = $validator->errors()->first();
             return $this->returnMsg(422, $errorMessage);
         }
-        $validator_data = $validator->validated();
-
-        $topList = [
-            0 => '3779629', //云音乐新歌榜
-            1 => '3778678', //云音乐热歌榜
-            2 => '2884035', ///云音乐原创榜
-            3 => '19723756', //云音乐飙升榜
-            5 => '180106', //UK排行榜周榜
-            4 => '10520166', //云音乐电音榜
-            6 => '60198', //美国Billboard周榜
-            7 => '21845217', //KTV嗨榜
-            8 => '11641012', //iTunes榜
-            9 => '120001', //Hit FM Top榜
-            10 => '60131', //日本Oricon周榜
-            11 => '3733003', //韩国Melon排行榜周榜
-            12 => '60255', //韩国Mnet排行榜周榜
-            13 => '46772709', //韩国Melon原声周榜
-            14 => '112504', //中国TOP排行榜(港台榜)
-            15 => '64016', //中国TOP排行榜(内地榜)
-            16 => '10169002', //香港电台中文歌曲龙虎榜
-            17 => '4395559', //华语金曲榜
-            18 => '1899724', //中国嘻哈榜
-            19 => '27135204', //法国 NRJ EuroHot 30周榜
-            20 => '112463', //台湾Hito排行榜
-            21 => '3812895', //Beatport全球电子舞曲榜
-            22 => '71385702', //云音乐ACG音乐榜
-            23 => '991319590', //云音乐说唱榜,
-            24 => '71384707', //云音乐古典音乐榜
-            25 => '1978921795', //云音乐电音榜
-            26 => '2250011882', //抖音排行榜
-            27 => '2617766278', //新声榜
-            28 => '745956260', //云音乐韩语榜
-            29 => '2023401535', //英国Q杂志中文版周榜
-            30 => '2006508653', //电竞音乐榜
-            31 => '2809513713', //云音乐欧美热歌榜
-            32 => '2809577409', //云音乐欧美新歌榜
-            33 => '2847251561', //说唱TOP榜
-            34 => '3001835560', //云音乐ACG动画榜
-            35 => '3001795926', //云音乐ACG游戏榜
-            36 => '3001890046', //云音乐ACG VOCALOID榜
-        ];
-
-        $data['id'] = $topList[$validator_data['idx']];
-        $data['n'] = 10000;
+        $data = $validator->validated();
+        $data['n'] = '500';
+        $data['s'] = '0';
 
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/weapi/v3/playlist/detail',
+            'https://interface3.music.163.com/api/playlist/v4/detail',
             $data,
-            ['crypto' => 'linuxapi', 'cookie' => $this->request->getCookieParams()]
+            ['crypto' => 'weapi', 'cookie' => $cookie]
         );
     }
 }

@@ -53,3 +53,16 @@ GET http://{{host}}/playlist/catlist
 Accept: application/json
 
 ###
+# 调整歌单顺序
+GET http://{{host}}/playlist/order/update?ids=[111,222]
+Accept: application/json
+
+###
+# TODO:歌单封面上传
+
+###
+# 精品歌单标签列表
+GET http://{{host}}/playlist/highquality/tags
+Accept: application/json
+
+###

@@ -11,40 +11,41 @@ declare(strict_types=1);
  */
 namespace App\Controller;
 
-class RecommendsController extends AbstractController
+class HomepageController extends AbstractController
 {
     /**
-     * 获取每日推荐歌单.
+     * 首页-发现.
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return \Psr\Http\Message\ResponseInterface
      */
-    public function getResource()
+    public function blockPage()
     {
+        $data = [
+            'refresh' => $this->request->input('refresh', true),
+        ];
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/weapi/v1/discovery/recommend/resource',
-            [],
+            'https://music.163.com/api/homepage/block/page',
+            $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
     }
 
     /**
-     * 获取每日推荐歌曲.
+     * 首页-发现-圆形图标入口列表.
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return \Psr\Http\Message\ResponseInterface
      */
-    public function getSongs()
+    public function dragonBall()
     {
-        $cookie = $this->request->getCookieParams();
-        unset($cookie['p_ip'], $cookie['p_ua']);
-        $cookie['os'] = 'ios';
+        $data = [];
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/api/v3/discovery/recommend/songs',
-            [],
-            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+            'https://music.163.com/eapi/homepage/dragon/ball/static',
+            $data,
+            ['crypto' => 'eapi', 'url' => '/api/homepage/dragon/ball/static', 'cookie' => $this->request->getCookieParams()]
         );
     }
 }

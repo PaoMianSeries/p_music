@@ -11,40 +11,46 @@ declare(strict_types=1);
  */
 namespace App\Controller;
 
-class RecommendsController extends AbstractController
+class HistoryController extends AbstractController
 {
     /**
-     * 获取每日推荐歌单.
+     * 获取历史日推可用日期列表.
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return \Psr\Http\Message\ResponseInterface
      */
-    public function getResource()
-    {
-        return $this->createCloudRequest(
-            'POST',
-            'https://music.163.com/weapi/v1/discovery/recommend/resource',
-            [],
-            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
-        );
-    }
-
-    /**
-     * 获取每日推荐歌曲.
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     * @throws \Psr\SimpleCache\InvalidArgumentException
-     * @return \Psr\Http\Message\ResponseInterface
-     */
-    public function getSongs()
+    public function recommendSongs()
     {
         $cookie = $this->request->getCookieParams();
         unset($cookie['p_ip'], $cookie['p_ua']);
         $cookie['os'] = 'ios';
+
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/api/v3/discovery/recommend/songs',
+            'https://music.163.com/api/discovery/recommend/songs/history/recent',
             [],
-            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+            ['crypto' => 'weapi', 'cookie' => $cookie]
+        );
+    }
+
+    /**
+     * 获取历史日推详情数据.
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function recommendSongDetail()
+    {
+        $cookie = $this->request->getCookieParams();
+        unset($cookie['p_ip'], $cookie['p_ua']);
+        $cookie['os'] = 'ios';
+
+        $data['date'] = $this->request->input('date', '');
+        return $this->createCloudRequest(
+            'POST',
+            'https://music.163.com/api/discovery/recommend/songs/history/detail',
+            $data,
+            ['crypto' => 'weapi', 'cookie' => $cookie]
         );
     }
 }
