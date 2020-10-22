@@ -52,7 +52,7 @@ class SongsController extends AbstractController
         );
         $data = json_decode($result->getBody()->getContents(), true);
         foreach ($data['data'] as $k => $datum) {
-            if (empty($datum['url'])) {
+            if (empty($datum['url']) || $datum['freeTrialInfo'] != null) {
                 if ($this->cache->has($datum['id'] . '_song_url')) {
                     $song_cache = $this->cache->get($datum['id'] . '_song_url');
                     $other_song_url = $song_cache['song']['url'] ?? '';
