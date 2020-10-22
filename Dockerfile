@@ -15,13 +15,9 @@ LABEL maintainer="ennnnny <kuye1130@gmail.com>" version="1.0" license="MIT"
 ARG timezone
 
 ENV TIMEZONE=${timezone:-"Asia/Shanghai"} \
-    COMPOSER_VERSION=1.10.1 \
+    COMPOSER_VERSION=1.10.10 \
     APP_ENV=local
 #    APP_ENV=prod
-
-WORKDIR /opt/www
-
-COPY . /opt/www
 
 # update
 RUN set -ex \
@@ -32,9 +28,6 @@ RUN set -ex \
     && chmod u+x composer.phar \
     && mv composer.phar /usr/local/bin/composer \
     && composer config -g repo.packagist composer https://mirrors.aliyun.com/composer \
-    && cd /opt/www \
-    && composer install --no-dev \
-    && composer dump-autoload -o \
     # show php version and extensions
     && php -v \
     && php -m \
@@ -53,14 +46,25 @@ RUN set -ex \
     # 命令行工具
     && apk add zsh curl wget vim git \
     && wget https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh -O - | zsh || true \
-    && echo 'ZSH_THEME="random"' > ~/.zshrc \
+    && echo 'ZSH_THEME="random"' > ~/.oh-my-zsh/custom/custom.zsh \
     # ---------- clear works ----------
     && rm -rf /var/cache/apk/* /tmp/* /usr/share/man \
-    && echo -e "\033[42;37m Build Completed :).\033[0m\n"
+    && echo -e "\033[42;37m Build Completed :)\033[0m\n"
+
+#RUN composer install --no-dev \
+#    && composer dump-autoload -o \
+#    && php /opt/www/bin/hyperf.php di:init-proxy
+
+#COPY . /opt/www
+
+WORKDIR /opt/www
+
+COPY . /opt/www
+RUN composer install --no-dev -o && php bin/hyperf.php
 
 VOLUME /opt/www
 
 EXPOSE 9501
 
-ENTRYPOINT php /opt/www/bin/hyperf.php start
+ENTRYPOINT ["php", "/opt/www/bin/hyperf.php", "start"]
 CMD ["zsh"]
