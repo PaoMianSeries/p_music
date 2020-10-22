@@ -19,6 +19,10 @@ ENV TIMEZONE=${timezone:-"Asia/Shanghai"} \
     APP_ENV=local
 #    APP_ENV=prod
 
+WORKDIR /opt/www
+
+COPY . /opt/www
+
 # update
 RUN set -ex \
     && apk update \
@@ -28,6 +32,9 @@ RUN set -ex \
     && chmod u+x composer.phar \
     && mv composer.phar /usr/local/bin/composer \
     && composer config -g repo.packagist composer https://mirrors.aliyun.com/composer \
+    && cd /opt/www \
+    && composer install --no-dev \
+    && composer dump-autoload -o \
     # show php version and extensions
     && php -v \
     && php -m \
@@ -57,14 +64,9 @@ RUN set -ex \
 
 #COPY . /opt/www
 
-WORKDIR /opt/www
-
-COPY . /opt/www
-RUN composer install --no-dev -o && php bin/hyperf.php
-
 VOLUME /opt/www
 
 EXPOSE 9501
 
-ENTRYPOINT ["php", "/opt/www/bin/hyperf.php", "start"]
+ENTRYPOINT php /opt/www/bin/hyperf.php start
 CMD ["zsh"]
