@@ -46,9 +46,9 @@ class SongsController extends AbstractController
         $data['br'] = (int) ($validated_data['br'] ?? 999000);
         $result = $this->createCloudRequest(
             'POST',
-            'https://music.163.com/api/song/enhance/player/url',
+            'https://interface3.music.163.com/eapi/song/enhance/player/url',
             $data,
-            ['crypto' => 'linuxapi', 'cookie' => $cookie]
+            ['crypto' => 'eapi', 'cookie' => $cookie, 'url' => '/api/song/enhance/player/url']
         );
         $data = json_decode($result->getBody()->getContents(), true);
         foreach ($data['data'] as $k => $datum) {
