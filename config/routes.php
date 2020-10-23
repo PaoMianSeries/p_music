@@ -169,6 +169,7 @@ Router::addGroup('/song/', function () {
     Router::addRoute(['GET', 'POST'], 'url', 'App\Controller\SongsController@getUrl'); // 获取音乐 url
     Router::addRoute(['GET', 'POST'], 'detail', 'App\Controller\SongsController@getDetail'); //获取歌曲详情
     Router::addRoute(['GET', 'POST'], 'order/update', 'App\Controller\SongsController@updateOrder'); //调整歌曲顺序
+    Router::addRoute(['GET', 'POST'], 'down/{id}.mp3', 'App\Controller\SongsController@down'); //中转歌曲
 });
 Router::addRoute(['GET', 'POST'], '/check/music', 'App\Controller\SongsController@checkMusic'); //音乐是否可用
 

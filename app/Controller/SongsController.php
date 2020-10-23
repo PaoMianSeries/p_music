@@ -25,6 +25,7 @@ class SongsController extends AbstractController
      */
     public function getUrl()
     {
+        $proxy = $this->request->input('proxy', false);
         $validator = $this->validationFactory->make($this->request->all(), [
             'id' => 'required',
             'br' => '',
@@ -60,6 +61,9 @@ class SongsController extends AbstractController
                     $other_song_url = $this->getUrlFormOther((string) $datum['id']);
                 }
                 if (! empty($other_song_url)) {
+                    if ($proxy) {
+                        $other_song_url = env('PC_WEB_URL', 'https://y.paomian.party/api').'/song/down/'.$datum['id'].'.mp3';
+                    }
                     $data['data'][$k]['url'] = $other_song_url;
                     $data['data'][$k]['br'] = 128000;
                     $data['data'][$k]['code'] = 200;
@@ -736,5 +740,17 @@ class SongsController extends AbstractController
             }
         }
         return [$song_url, $song_size];
+    }
+
+    public function down()
+    {
+        $id = $this->request->route('id', '');
+        if (!empty($id)) {
+            $song_cache = $this->cache->get($id . '_song_url');
+            $url = $song_cache['song']['url'] ?? '';
+            if (!empty($url)) {
+                return $this->response->redirect($url);
+            }
+        }
     }
 }
