@@ -87,7 +87,14 @@ class LoginController extends AbstractController
         }
         $param = $validator->validated();
         $data['username'] = $param['email'];
-        $data['password'] = md5($param['password']);
+
+        $md5_password = $this->request->input('md5_password', '');
+        if (!empty($md5_password) && $data['password'] == 'fakePassword') {
+            $data['password'] = $md5_password;
+        } else {
+            $data['password'] = md5($data['password']);
+        }
+
         $data['rememberLogin'] = 'true';
         $res = $this->createCloudRequest(
             'POST',
