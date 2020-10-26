@@ -44,7 +44,14 @@ class LoginController extends AbstractController
         if (! isset($data['countrycode']) || empty($data['countrycode'])) {
             $data['countrycode'] = '86';
         }
-        $data['password'] = md5($data['password']);
+
+        $md5_password = $this->request->input('md5_password', '');
+        if (!empty($md5_password) && $data['password'] == 'fakePassword') {
+            $data['password'] = $md5_password;
+        } else {
+            $data['password'] = md5($data['password']);
+        }
+
         return $this->createCloudRequest(
             'POST',
             'https://music.163.com/weapi/login/cellphone',
