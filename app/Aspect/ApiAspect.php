@@ -70,7 +70,7 @@ class ApiAspect extends AbstractAspect
         SendController::class,
         SharesController::class,
         SimiController::class,
-//        SongsController::class,
+        //        SongsController::class,
         ToplistsController::class,
         TopsController::class,
         UsersController::class,

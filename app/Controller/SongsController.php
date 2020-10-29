@@ -62,7 +62,7 @@ class SongsController extends AbstractController
                 }
                 if (! empty($other_song_url)) {
                     if ($proxy) {
-                        $other_song_url = env('PC_WEB_URL', 'https://y.paomian.party/api').'/song/down/'.$datum['id'].'.mp3';
+                        $other_song_url = env('PC_WEB_URL', 'https://y.paomian.party/api') . '/song/down/' . $datum['id'] . '.mp3';
                     }
                     $data['data'][$k]['url'] = $other_song_url;
                     $data['data'][$k]['br'] = 128000;
@@ -239,9 +239,9 @@ class SongsController extends AbstractController
         $res = [];
         if (! empty($song_name)) {
             $parallel = new Parallel();
-            $parallel->add(function () use ($song_name, $song_ar_name) {
-                return $this->getBaidu($song_name, $song_ar_name);
-            }, 'baidu');
+//            $parallel->add(function () use ($song_name, $song_ar_name) {
+//                return $this->getBaidu($song_name, $song_ar_name);
+//            }, 'baidu');
             $parallel->add(function () use ($song_name, $song_ar_name) {
                 return $this->getXiaMi($song_name, $song_ar_name);
             }, 'xiami');
@@ -276,7 +276,7 @@ class SongsController extends AbstractController
                     }
                 }
             }
-            if (!empty($res['song']['url'])) {
+            if (! empty($res['song']['url'])) {
                 //写缓存
                 $this->cache->set($id . '_song_url', $res, 60 * 30);
             } else {
@@ -604,55 +604,73 @@ class SongsController extends AbstractController
             if ($response->getStatusCode() == 200) {
                 $body = $response->getBody()->getContents();
                 $body = json_decode($body, true);
-                $song_id = '';
+                $song_id = $current_id = '';
                 if (isset($body['musics'])) {
                     foreach ($body['musics'] as $music) {
                         if (mb_strpos($music['songName'], $name) !== false) {
                             $song_id = $music['copyrightId'];
+                            $current_id = $music['id'];
                             break;
                         }
                     }
                 }
                 if (! empty($song_id)) {
 //                    $type = [3,2,1];
-                    $type = [2, 1];
-                    foreach ($type as $item) {
-                        $text = json_encode([
-                            'copyrightId' => $song_id,
-                            'type' => $item,
-                        ]);
-//                        $password = bin2hex('4ea5c508a6566e76240543f8feb06fd457777be39549c4016436afda65d2330e');
-                        $key = hex2bin('a7c06c27da48afac469c15326daec278a2c643a01c1f1862f54bf9023f632e37');
-                        $iv = hex2bin('8a2a4dc1967361d33a5b486c09e53b75');
-                        $salt = hex2bin('9d45f545adeb6faf');
-
-                        $ciphered = openssl_encrypt($text, 'aes-256-cbc', $key, 0, $iv);
-                        $data = urlencode(base64_encode('Salted__' . $salt . base64_decode($ciphered)));
-//                        $data = base64_encode($this->aesEncrypt(json_encode($text), $key, $iv));
-//                        $rsa = new RSA();
-//                        $rsa->loadKey('MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC8asrfSaoOb4je+DSmKdriQJKWVJ2oDZrs3wi5W67m3LwTB9QVR+cE3XWU21Nx+YBxS0yun8wDcjgQvYt625ZCcgin2ro/eOkNyUOTBIbuj9CvMnhUYiR61lC1f1IGbrSYYimqBVSjpifVufxtx/I3exReZosTByYp4Xwpb1+WAQIDAQAB');
-//                        $secKey = $rsa->encrypt($password);
-//                        $secKey = urlencode(base64_encode($secKey));
-                        $secKey = 'fsVv3wRL%2FLsgNtYsBHBU8YZmwcrJ66QSAmJ53lD%2Bn%2FiXhW8hFCSI58rP1CJ57lWJ8cWsIObSQwkhd8XXhpU9bDXT%2FBt%2F6T3%2BNwqjcTeKb0WuezEs7ZnmzqNqxj6J%2B33vqN0Moso7H%2BBQGi4lY00vHTKUEGHWvtfs0Y9UIwBehs8%3D';
-
-                        $get_url = 'http://music.migu.cn/v3/api/music/audioPlayer/getPlayInfo?dataType=2&data=' . $data . '&secKey=' . $secKey;
-                        $headers = array_merge($headers, [
-                            'origin' => 'http://music.migu.cn/',
-                            'referer' => 'http://music.migu.cn/',
-                        ]);
-                        $client_params['headers'] = $headers ?? [];
-                        $response2 = $client->request('GET', $get_url, $client_params);
-                        if ($response2->getStatusCode() == 200) {
-                            $body = $response2->getBody()->getContents();
-                            $body = json_decode($body, true);
-                            if (isset($body['returnCode']) && $body['returnCode'] == '000000' && isset($body['data'])) {
-                                $song_url = $body['data']['playUrl'] ?? '';
-                                if (! empty($song_url)) {
-                                    break;
-                                }
-                            }
+//                    $type = [2, 1];
+//                    foreach ($type as $item) {
+//                        $text = json_encode([
+//                            'copyrightId' => $song_id,
+//                            'type' => $item,
+//                        ]);
+                    ////                        $password = bin2hex('4ea5c508a6566e76240543f8feb06fd457777be39549c4016436afda65d2330e');
+//                        $key = hex2bin('a7c06c27da48afac469c15326daec278a2c643a01c1f1862f54bf9023f632e37');
+//                        $iv = hex2bin('8a2a4dc1967361d33a5b486c09e53b75');
+//                        $salt = hex2bin('9d45f545adeb6faf');
+//
+//                        $ciphered = openssl_encrypt($text, 'aes-256-cbc', $key, 0, $iv);
+//                        $data = urlencode(base64_encode('Salted__' . $salt . base64_decode($ciphered)));
+                    ////                        $data = base64_encode($this->aesEncrypt(json_encode($text), $key, $iv));
+                    ////                        $rsa = new RSA();
+                    ////                        $rsa->loadKey('MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC8asrfSaoOb4je+DSmKdriQJKWVJ2oDZrs3wi5W67m3LwTB9QVR+cE3XWU21Nx+YBxS0yun8wDcjgQvYt625ZCcgin2ro/eOkNyUOTBIbuj9CvMnhUYiR61lC1f1IGbrSYYimqBVSjpifVufxtx/I3exReZosTByYp4Xwpb1+WAQIDAQAB');
+                    ////                        $secKey = $rsa->encrypt($password);
+                    ////                        $secKey = urlencode(base64_encode($secKey));
+//                        $secKey = 'fsVv3wRL%2FLsgNtYsBHBU8YZmwcrJ66QSAmJ53lD%2Bn%2FiXhW8hFCSI58rP1CJ57lWJ8cWsIObSQwkhd8XXhpU9bDXT%2FBt%2F6T3%2BNwqjcTeKb0WuezEs7ZnmzqNqxj6J%2B33vqN0Moso7H%2BBQGi4lY00vHTKUEGHWvtfs0Y9UIwBehs8%3D';
+//
+//                        $get_url = 'http://music.migu.cn/v3/api/music/audioPlayer/getPlayInfo?dataType=2&data=' . $data . '&secKey=' . $secKey;
+                    $get_url = 'http://app.c.nf.migu.cn/MIGUM2.0/v2.0/content/listen-url';
+//                        $headers = array_merge($headers, [
+//                            'origin' => 'http://music.migu.cn/',
+//                            'referer' => 'http://music.migu.cn/',
+//                        ]);
+                    $headers = [
+                        'referer' => 'http://music.migu.cn/v3/music/player/audio',
+                        'channel' => '0146951',
+                        'uid' => 1234,
+                        'X-Real-IP' => $this->chooseChinaIp(),
+                    ];
+                    $client_params['headers'] = $headers ?? [];
+                    $client_params['query'] = [
+                        'netType' => '01',
+                        'resourceType' => 'E',
+                        'songId' => $current_id,
+                        'toneFlag' => 'SQ',
+                        'dataType' => 2,
+                    ];
+                    $response2 = $client->request('GET', $get_url, $client_params);
+                    if ($response2->getStatusCode() == 200) {
+                        $body = $response2->getBody()->getContents();
+                        $body = json_decode($body, true);
+                        if (isset($body['code']) && $body['code'] == '000000' && isset($body['data'])) {
+                            $song_url = $body['data']['url'] ?? '';
                         }
+//                            if (isset($body['returnCode']) && $body['returnCode'] == '000000' && isset($body['data'])) {
+//                                $song_url = $body['data']['playUrl'] ?? '';
+////                                if (! empty($song_url)) {
+////                                    break;
+////                                }
+//                            }
                     }
+//                    }
                 }
             }
         }
@@ -677,7 +695,8 @@ class SongsController extends AbstractController
             //search
             $search_url = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp?' .
                 'ct=24&qqmusic_ver=1298&new_json=1&remoteplace=txt.yqq.center&' .
-                'searchid=46804741196796149&t=0&aggr=1&cr=1&catZhida=1&lossless=0&' .
+//                'searchid=46804741196796149&t=0&aggr=1&cr=1&catZhida=1&lossless=0&' .
+                't=0&aggr=1&cr=1&catZhida=1&lossless=0&' .
                 'flag_qc=0&p=1&n=20&w=' . $key .
                 '&g_tk=5381&jsonpCallback=MusicJsonCallback10005317669353331&loginUin=0&hostUin=0&' .
                 'format=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0';
@@ -745,10 +764,10 @@ class SongsController extends AbstractController
     public function down()
     {
         $id = $this->request->route('id', '');
-        if (!empty($id)) {
+        if (! empty($id)) {
             $song_cache = $this->cache->get($id . '_song_url');
             $url = $song_cache['song']['url'] ?? '';
-            if (!empty($url)) {
+            if (! empty($url)) {
                 return $this->response->redirect($url);
             }
         }

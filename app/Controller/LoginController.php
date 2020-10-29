@@ -46,7 +46,7 @@ class LoginController extends AbstractController
         }
 
         $md5_password = $this->request->input('md5_password', '');
-        if (!empty($md5_password) && $data['password'] == 'fakePassword') {
+        if (! empty($md5_password) && $data['password'] == 'fakePassword') {
             $data['password'] = $md5_password;
         } else {
             $data['password'] = md5($data['password']);
@@ -89,7 +89,7 @@ class LoginController extends AbstractController
         $data['username'] = $param['email'];
 
         $md5_password = $this->request->input('md5_password', '');
-        if (!empty($md5_password) && $data['password'] == 'fakePassword') {
+        if (! empty($md5_password) && $data['password'] == 'fakePassword') {
             $data['password'] = $md5_password;
         } else {
             $data['password'] = md5($data['password']);
