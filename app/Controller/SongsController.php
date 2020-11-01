@@ -11,6 +11,7 @@ declare(strict_types=1);
  */
 namespace App\Controller;
 
+use Hyperf\DbConnection\Db;
 use Hyperf\Utils\Exception\ParallelExecutionException;
 use Hyperf\Utils\Parallel;
 use phpseclib\Crypt\RSA;
@@ -178,12 +179,27 @@ class SongsController extends AbstractController
             'c' => '[' . implode(',', $temp_lists) . ']',
             'ids' => '[' . $song_ids . ']',
         ];
-        return $this->createCloudRequest(
+        $res = $this->createCloudRequest(
             'POST',
             'https://music.163.com/weapi/v3/song/detail',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
+        $body = $res->getBody()->getContents();
+        $body = json_decode($body, true);
+        if (isset($body['songs']) && count($body['songs']) > 0) {
+            foreach ($body['songs'] as $song) {
+                $ar_data = [];
+                foreach ($song['ar'] as $v) {
+                    $ar_data[] = $v['name'];
+                }
+                Db::table('songs')->updateOrInsert(
+                    ['m_id' => $song['id']],
+                    ['m_id' => $song['id'], 'name' => $song['name'], 'album' => $song['al']['name'], 'artist' => json_encode($ar_data)]
+                );
+            }
+        }
+        return $res;
     }
 
     /**
@@ -220,42 +236,75 @@ class SongsController extends AbstractController
     /**
      * 从其它来源获取地址
      * @param string $id 歌曲ID
+     * @return string
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
-     * @return string
      */
-    public function getUrlFormOther($id)
+    public function getUrlFormOther(string $id)
     {
         //读缓存
         if ($this->cache->has($id . '_song_url')) {
             $res = $this->cache->get($id . '_song_url');
             return $res['song']['url'] ?? '';
         }
-        $song_info_res = $this->getSongDetail($id);
-        $song_info = json_decode($song_info_res->getBody()->getContents(), true);
+        $song_info = Db::table('songs')->where('m_id', $id)->first();
+        if ($song_info) {
+            $song_name = $song_info->name;
+            $song_ar_name = head(json_decode($song_info->artist, true));
+        } else {
+            $song_info_res = $this->getSongDetail($id);
+            $song_info = json_decode($song_info_res->getBody()->getContents(), true);
 
-        $song_name = $song_info['songs'][0]['name'] ?? ''; //歌曲名
-        $song_ar_name = $song_info['songs'][0]['ar'][0]['name'] ?? ''; //歌手
+            $song_name = $song_info['songs'][0]['name'] ?? ''; //歌曲名
+            $song_ar_name = $song_info['songs'][0]['ar'][0]['name'] ?? ''; //歌手
+        }
+
         $res = [];
         if (! empty($song_name)) {
+            $song_data = Db::table('songs')->where('m_id', $id)->first();
             $parallel = new Parallel();
-//            $parallel->add(function () use ($song_name, $song_ar_name) {
-//                return $this->getBaidu($song_name, $song_ar_name);
+//            $parallel->add(function () use ($id, $song_name, $song_ar_name, $song_data) {
+//                if (!empty($song_data->baidu)) {
+//                    $baidu = json_decode($song_data->baidu, true);
+//                } else {
+//                    $baidu = [];
+//                }
+//                return $this->getBaidu($id, $song_name, $song_ar_name, $baidu);
 //            }, 'baidu');
-            $parallel->add(function () use ($song_name, $song_ar_name) {
-                return $this->getXiaMi($song_name, $song_ar_name);
+            $parallel->add(function () use ($id, $song_name, $song_ar_name, $song_data) {
+                if (! empty($song_data->xiami)) {
+                    $data = json_decode($song_data->xiami, true);
+                } else {
+                    $data = [];
+                }
+                return $this->getXiaMi($id, $song_name, $song_ar_name, $data);
             }, 'xiami');
-            $parallel->add(function () use ($song_name, $song_ar_name) {
-                return $this->getKuWo($song_name, $song_ar_name);
+            $parallel->add(function () use ($id, $song_name, $song_ar_name) {
+                return $this->getKuWo($id, $song_name, $song_ar_name);
             }, 'kuwo');
-            $parallel->add(function () use ($song_name, $song_ar_name) {
-                return $this->getKuGou($song_name, $song_ar_name);
+            $parallel->add(function () use ($id, $song_name, $song_ar_name, $song_data) {
+                if (! empty($song_data->kugou)) {
+                    $data = json_decode($song_data->kugou, true);
+                } else {
+                    $data = [];
+                }
+                return $this->getKuGou($id, $song_name, $song_ar_name, $data);
             }, 'kugou');
-            $parallel->add(function () use ($song_name, $song_ar_name) {
-                return $this->getMiGu($song_name, $song_ar_name);
+            $parallel->add(function () use ($id, $song_name, $song_ar_name, $song_data) {
+                if (! empty($song_data->migu)) {
+                    $data = json_decode($song_data->migu, true);
+                } else {
+                    $data = [];
+                }
+                return $this->getMiGu($id, $song_name, $song_ar_name, $data);
             }, 'migu');
-            $parallel->add(function () use ($song_name, $song_ar_name) {
-                return $this->getQQ($song_name, $song_ar_name);
+            $parallel->add(function () use ($id, $song_name, $song_ar_name, $song_data) {
+                if (! empty($song_data->qq)) {
+                    $data = json_decode($song_data->qq, true);
+                } else {
+                    $data = [];
+                }
+                return $this->getQQ($id, $song_name, $song_ar_name, $data);
             }, 'qq');
             try {
                 $results = $parallel->wait();
@@ -288,57 +337,67 @@ class SongsController extends AbstractController
 
     /**
      * baidu源.
+     * @param $id
      * @param $name
      * @param $ar_name
+     * @param $data
+     * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return array
      */
-    public function getBaidu($name, $ar_name)
+    public function getBaidu($id, $name, $ar_name, $data)
     {
         $song_url = '';
         $song_size = 0;
-        if (! empty($name)) {
+        $song_id = 0;
+
+        $headers = [
+            'accept' => 'application/json, text/plain, */*',
+            'accept-encoding' => 'gzip, deflate',
+            'accept-language' => 'zh-CN,zh;q=0.9',
+            'user-agent' => $this->chooseUserAgent('pc'),
+            'X-Real-IP' => $this->chooseChinaIp(),
+        ];
+        $client = $this->clientFactory->create();
+        $client_params['headers'] = $headers ?? [];
+
+        if (isset($data['song_id']) && ! empty($data['song_id'])) {
+            $song_id = $data['song_id'];
+        } elseif (! empty($name)) {
             $key = urlencode(trim($name . ' ' . $ar_name));
             //search
             $search_url = 'http://musicapi.taihe.com/v1/restserver/ting?' .
                 'from=qianqianmini&method=baidu.ting.search.merge&' .
                 'isNew=1&platform=darwin&page_no=1&page_size=30&' .
                 'query=' . $key . '&version=11.2.1';
-            $headers = [
-                'accept' => 'application/json, text/plain, */*',
-                'accept-encoding' => 'gzip, deflate',
-                'accept-language' => 'zh-CN,zh;q=0.9',
-                'user-agent' => $this->chooseUserAgent('pc'),
-                'X-Real-IP' => $this->chooseChinaIp(),
-            ];
-            $client = $this->clientFactory->create();
-            $client_params['headers'] = $headers ?? [];
             $response = $client->request('GET', $search_url, $client_params);
             if ($response->getStatusCode() == 200) {
                 $body = $response->getBody()->getContents();
                 $body = json_decode($body, true);
-                $song_id = 0;
                 if (isset($body['result'], $body['result']['song_info'])) {
                     if (isset($body['result']['song_info']['song_list']) && is_array($body['result']['song_info']['song_list'])) {
                         foreach ($body['result']['song_info']['song_list'] as $item) {
                             if (mb_strpos($item['title'], $name) !== false) {
                                 $song_id = $item['song_id'];
+                                if (! empty($song_id)) {
+                                    Db::table('songs')->where('m_id', $id)->update(['baidu' => json_encode(['song_id' => $song_id])]);
+                                }
                                 break;
                             }
                         }
                     }
                 }
-                if ($song_id > 0) {
-                    //get url
-                    $get_url = 'http://music.taihe.com/data/music/fmlink?songIds=' . $song_id . '&type=mp3';
-                    $response2 = $client->request('GET', $get_url, $client_params);
-                    if ($response2->getStatusCode() == 200) {
-                        $body = $response2->getBody()->getContents();
-                        $body = json_decode($body, true);
-                        $song_url = $body['data']['songList'][0]['songLink'] ?? '';
-                        $song_size = $body['data']['songList'][0]['size'] ?? 0;
-                    }
-                }
+            }
+        }
+        if ($song_id > 0) {
+            //get url
+            $get_url = 'http://music.taihe.com/data/music/fmlink?songIds=' . $song_id . '&type=mp3';
+            $response2 = $client->request('GET', $get_url, $client_params);
+            if ($response2->getStatusCode() == 200) {
+                $body = $response2->getBody()->getContents();
+                $body = json_decode($body, true);
+                $song_url = $body['data']['songList'][0]['songLink'] ?? '';
+                $song_size = $body['data']['songList'][0]['size'] ?? 0;
             }
         }
         return [$song_url, $song_size];
@@ -346,25 +405,40 @@ class SongsController extends AbstractController
 
     /**
      * xiami源.
+     * @param $id
      * @param $name
      * @param $ar_name
+     * @param $data
+     * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return array
      */
-    public function getXiaMi($name, $ar_name)
+    public function getXiaMi($id, $name, $ar_name, $data)
     {
         $song_url = '';
         $song_size = 0;
-        if (! empty($name)) {
-            $key = trim($name . ' ' . $ar_name);
+        $song_id = 0;
 
-            $client_opt = [
-                'verify' => false,
-            ];
-            $headers = [
-                'user-agent' => $this->chooseUserAgent('pc'),
-                'X-Real-IP' => $this->chooseChinaIp(),
-            ];
+        $client_opt = [
+            'verify' => false,
+        ];
+        $headers = [
+            'user-agent' => $this->chooseUserAgent('pc'),
+            'X-Real-IP' => $this->chooseChinaIp(),
+        ];
+        $client = $this->clientFactory->create($client_opt);
+        $headers = array_merge($headers, [
+            'accept' => 'application/json, text/plain, */*',
+            'accept-encoding' => 'gzip, deflate',
+            'accept-language' => 'zh-CN,zh;q=0.9',
+            'referer' => 'https://h.xiami.com/',
+        ]);
+        $client_params['headers'] = $headers ?? [];
+
+        if (isset($data['song_id']) && ! empty($data['song_id'])) {
+            $song_id = $data['song_id'];
+        } elseif (! empty($name)) {
+            $key = trim($name . ' ' . $ar_name);
             //way_1
 //            $jar = new \GuzzleHttp\Cookie\CookieJar();
 //            $client_opt = [
@@ -393,21 +467,12 @@ class SongsController extends AbstractController
 //            $response = $client->request('GET', $search_url, $client_params);
             //way_2
             //search
-            $client = $this->clientFactory->create($client_opt);
             $search_url = 'http://api.xiami.com/web?v=2.0&app_key=1' .
                 '&key=' . urlencode($key) . '&page=1&limit=20&callback=jsonp&r=search/songs';
-            $headers = array_merge($headers, [
-                'accept' => 'application/json, text/plain, */*',
-                'accept-encoding' => 'gzip, deflate',
-                'accept-language' => 'zh-CN,zh;q=0.9',
-                'referer' => 'https://h.xiami.com/',
-            ]);
-            $client_params['headers'] = $headers ?? [];
             $response = $client->request('GET', $search_url, $client_params);
 
             if ($response->getStatusCode() == 200) {
                 $body = $response->getBody()->getContents();
-                $song_id = 0;
                 //way_1
 //                $body = $response->getBody()->getContents();
 //                $body = json_decode($body, true);
@@ -430,26 +495,29 @@ class SongsController extends AbstractController
                     foreach ($body_array['data']['songs'] as $song) {
                         if (mb_strpos($song['song_name'], $name) !== false) {
                             $song_id = $song['song_id'];
+                            if (! empty($song_id)) {
+                                Db::table('songs')->where('m_id', $id)->update(['xiami' => json_encode(['song_id' => $song_id])]);
+                            }
                             break;
                         }
                     }
                 }
-                if ($song_id > 0) {
-                    //way_1
-                    //way_2
-                    $get_url = 'https://api.xiami.com/web?v=2.0&app_key=1&id=' . $song_id . '&callback=jsonp&r=song/detail';
-                    $response2 = $client->request('GET', $get_url, $client_params);
-                    if ($response2->getStatusCode() == 200) {
-                        $body = $response2->getBody()->getContents();
-                        preg_match('/jsonp\((.*)\)/', $body, $matches);
-                        if (isset($matches[1])) {
-                            $body_array = json_decode($matches[1], true);
-                        } else {
-                            $body_array = [];
-                        }
-                        $song_url = $body_array['data']['song']['listen_file'] ?? '';
-                    }
+            }
+        }
+        if ($song_id > 0) {
+            //way_1
+            //way_2
+            $get_url = 'https://api.xiami.com/web?v=2.0&app_key=1&id=' . $song_id . '&callback=jsonp&r=song/detail';
+            $response2 = $client->request('GET', $get_url, $client_params);
+            if ($response2->getStatusCode() == 200) {
+                $body = $response2->getBody()->getContents();
+                preg_match('/jsonp\((.*)\)/', $body, $matches);
+                if (isset($matches[1])) {
+                    $body_array = json_decode($matches[1], true);
+                } else {
+                    $body_array = [];
                 }
+                $song_url = $body_array['data']['song']['listen_file'] ?? '';
             }
         }
 
@@ -458,12 +526,14 @@ class SongsController extends AbstractController
 
     /**
      * kuwo源.
+     * @param $id
      * @param $name
      * @param $ar_name
+     * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return array
      */
-    public function getKuWo($name, $ar_name)
+    public function getKuWo($id, $name, $ar_name)
     {
         $song_url = '';
         $song_size = 0;
@@ -499,6 +569,9 @@ class SongsController extends AbstractController
                     foreach ($body['data']['list'] as $datum) {
                         if (mb_strpos($datum['name'], $name) !== false) {
                             $song_id = $datum['musicrid'] ?? '';
+                            if (! empty($song_id)) {
+                                Db::table('songs')->where('m_id', $id)->update(['kuwo' => json_encode(['song_id' => $song_id])]);
+                            }
                             break;
                         }
                     }
@@ -522,53 +595,62 @@ class SongsController extends AbstractController
      * kugou源.
      * @param $name
      * @param $ar_name
+     * @param mixed $id
+     * @param mixed $data
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return array
      */
-    public function getKuGou($name, $ar_name)
+    public function getKuGou($id, $name, $ar_name, $data)
     {
         $song_url = '';
         $song_size = 0;
-        if (! empty($name)) {
+        $song_id = '';
+
+        $headers = [
+            'accept' => 'application/json, text/plain, */*',
+            'accept-encoding' => 'gzip, deflate',
+            'accept-language' => 'zh-CN,zh;q=0.9',
+            'user-agent' => $this->chooseUserAgent('pc'),
+            'X-Real-IP' => $this->chooseChinaIp(),
+        ];
+        $client = $this->clientFactory->create();
+        $client_params['headers'] = $headers ?? [];
+
+        if (isset($data['song_id']) && ! empty($data['song_id'])) {
+            $song_id = $data['song_id'];
+        } elseif (! empty($name)) {
             $key = urlencode(trim($name . ' ' . $ar_name));
 
             //search
             $search_url = 'http://songsearch.kugou.com/song_search_v2?keyword=' . $key . '&page=1';
-            $headers = [
-                'accept' => 'application/json, text/plain, */*',
-                'accept-encoding' => 'gzip, deflate',
-                'accept-language' => 'zh-CN,zh;q=0.9',
-                'user-agent' => $this->chooseUserAgent('pc'),
-                'X-Real-IP' => $this->chooseChinaIp(),
-            ];
-            $client = $this->clientFactory->create();
-            $client_params['headers'] = $headers ?? [];
             $response = $client->request('GET', $search_url, $client_params);
             if ($response->getStatusCode() == 200) {
                 $body = $response->getBody()->getContents();
                 $body = json_decode($body, true);
-                $song_id = '';
                 if (isset($body['data']['lists'])) {
                     foreach ($body['data']['lists'] as $list) {
                         if (mb_strpos($list['SongName'], $name) !== false) {
                             $song_id = $list['FileHash'];
+                            if (! empty($song_id)) {
+                                Db::table('songs')->where('m_id', $id)->update(['kugou' => json_encode(['song_id' => $song_id])]);
+                            }
                             break;
                         }
                     }
                 }
-                if (! empty($song_id)) {
-                    //get url
-                    $get_url = 'http://trackercdn.kugou.com/i/v2/?key=' . md5($song_id . 'kgcloudv2') .
-                        '&hash=' . $song_id . '&br=hq&appid=1005&pid=2&cmd=25&behavior=play';
-                    $response2 = $client->request('GET', $get_url, $client_params);
-                    if ($response2->getStatusCode() == 200) {
-                        $body = $response2->getBody()->getContents();
-                        $body = json_decode($body, true);
-                        $url = $body['url'] ?? [];
-                        $song_url = array_shift($url);
-                        $song_size = $body['fileSize'] ?? 0;
-                    }
-                }
+            }
+        }
+        if (! empty($song_id)) {
+            //get url
+            $get_url = 'http://trackercdn.kugou.com/i/v2/?key=' . md5($song_id . 'kgcloudv2') .
+                '&hash=' . $song_id . '&br=hq&appid=1005&pid=2&cmd=25&behavior=play';
+            $response2 = $client->request('GET', $get_url, $client_params);
+            if ($response2->getStatusCode() == 200) {
+                $body = $response2->getBody()->getContents();
+                $body = json_decode($body, true);
+                $url = $body['url'] ?? [];
+                $song_url = array_shift($url);
+                $song_size = $body['fileSize'] ?? 0;
             }
         }
 
@@ -577,44 +659,58 @@ class SongsController extends AbstractController
 
     /**
      * migu源.
+     * @param $id
      * @param $name
      * @param $ar_name
+     * @param $data
+     * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return array
      */
-    public function getMiGu($name, $ar_name)
+    public function getMiGu($id, $name, $ar_name, $data)
     {
         $song_url = '';
         $song_size = 0;
-        if (! empty($name)) {
+        $song_id = $current_id = '';
+
+        $headers = [
+            'accept' => 'application/json, text/plain, */*',
+            'accept-encoding' => 'gzip, deflate',
+            'accept-language' => 'zh-CN,zh;q=0.9',
+            'user-agent' => $this->chooseUserAgent('pc'),
+            'X-Real-IP' => $this->chooseChinaIp(),
+        ];
+        $client = $this->clientFactory->create();
+        $client_params['headers'] = $headers ?? [];
+
+        if (isset($data['song_id']) && ! empty($data['song_id'])) {
+            $song_id = $data['song_id'];
+            $current_id = $data['c_id'];
+        } elseif (! empty($name)) {
             $key = urlencode(trim($name . ' ' . $ar_name));
 
-            $headers = [
-                'accept' => 'application/json, text/plain, */*',
-                'accept-encoding' => 'gzip, deflate',
-                'accept-language' => 'zh-CN,zh;q=0.9',
-                'user-agent' => $this->chooseUserAgent('pc'),
-                'X-Real-IP' => $this->chooseChinaIp(),
-            ];
             //search
             $search_url = 'http://m.music.migu.cn/migu/remoting/scr_search_tag?keyword=' . $key . '&type=2&rows=20&pgc=1';
-            $client = $this->clientFactory->create();
-            $client_params['headers'] = $headers ?? [];
             $response = $client->request('GET', $search_url, $client_params);
             if ($response->getStatusCode() == 200) {
                 $body = $response->getBody()->getContents();
                 $body = json_decode($body, true);
-                $song_id = $current_id = '';
+
                 if (isset($body['musics'])) {
                     foreach ($body['musics'] as $music) {
                         if (mb_strpos($music['songName'], $name) !== false) {
                             $song_id = $music['copyrightId'];
                             $current_id = $music['id'];
+                            if (! empty($song_id) && ! empty($current_id)) {
+                                Db::table('songs')->where('m_id', $id)->update(['migu' => json_encode(['song_id' => $song_id, 'c_id' => $current_id])]);
+                            }
                             break;
                         }
                     }
                 }
-                if (! empty($song_id)) {
+            }
+        }
+        if (! empty($current_id)) {
 //                    $type = [3,2,1];
 //                    $type = [2, 1];
 //                    foreach ($type as $item) {
@@ -622,57 +718,55 @@ class SongsController extends AbstractController
 //                            'copyrightId' => $song_id,
 //                            'type' => $item,
 //                        ]);
-                    ////                        $password = bin2hex('4ea5c508a6566e76240543f8feb06fd457777be39549c4016436afda65d2330e');
+            ////                        $password = bin2hex('4ea5c508a6566e76240543f8feb06fd457777be39549c4016436afda65d2330e');
 //                        $key = hex2bin('a7c06c27da48afac469c15326daec278a2c643a01c1f1862f54bf9023f632e37');
 //                        $iv = hex2bin('8a2a4dc1967361d33a5b486c09e53b75');
 //                        $salt = hex2bin('9d45f545adeb6faf');
 //
 //                        $ciphered = openssl_encrypt($text, 'aes-256-cbc', $key, 0, $iv);
 //                        $data = urlencode(base64_encode('Salted__' . $salt . base64_decode($ciphered)));
-                    ////                        $data = base64_encode($this->aesEncrypt(json_encode($text), $key, $iv));
-                    ////                        $rsa = new RSA();
-                    ////                        $rsa->loadKey('MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC8asrfSaoOb4je+DSmKdriQJKWVJ2oDZrs3wi5W67m3LwTB9QVR+cE3XWU21Nx+YBxS0yun8wDcjgQvYt625ZCcgin2ro/eOkNyUOTBIbuj9CvMnhUYiR61lC1f1IGbrSYYimqBVSjpifVufxtx/I3exReZosTByYp4Xwpb1+WAQIDAQAB');
-                    ////                        $secKey = $rsa->encrypt($password);
-                    ////                        $secKey = urlencode(base64_encode($secKey));
+            ////                        $data = base64_encode($this->aesEncrypt(json_encode($text), $key, $iv));
+            ////                        $rsa = new RSA();
+            ////                        $rsa->loadKey('MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC8asrfSaoOb4je+DSmKdriQJKWVJ2oDZrs3wi5W67m3LwTB9QVR+cE3XWU21Nx+YBxS0yun8wDcjgQvYt625ZCcgin2ro/eOkNyUOTBIbuj9CvMnhUYiR61lC1f1IGbrSYYimqBVSjpifVufxtx/I3exReZosTByYp4Xwpb1+WAQIDAQAB');
+            ////                        $secKey = $rsa->encrypt($password);
+            ////                        $secKey = urlencode(base64_encode($secKey));
 //                        $secKey = 'fsVv3wRL%2FLsgNtYsBHBU8YZmwcrJ66QSAmJ53lD%2Bn%2FiXhW8hFCSI58rP1CJ57lWJ8cWsIObSQwkhd8XXhpU9bDXT%2FBt%2F6T3%2BNwqjcTeKb0WuezEs7ZnmzqNqxj6J%2B33vqN0Moso7H%2BBQGi4lY00vHTKUEGHWvtfs0Y9UIwBehs8%3D';
 //
 //                        $get_url = 'http://music.migu.cn/v3/api/music/audioPlayer/getPlayInfo?dataType=2&data=' . $data . '&secKey=' . $secKey;
-                    $get_url = 'http://app.c.nf.migu.cn/MIGUM2.0/v2.0/content/listen-url';
+            $get_url = 'http://app.c.nf.migu.cn/MIGUM2.0/v2.0/content/listen-url';
 //                        $headers = array_merge($headers, [
 //                            'origin' => 'http://music.migu.cn/',
 //                            'referer' => 'http://music.migu.cn/',
 //                        ]);
-                    $headers = [
-                        'referer' => 'http://music.migu.cn/v3/music/player/audio',
-                        'channel' => '0146951',
-                        'uid' => 1234,
-                        'X-Real-IP' => $this->chooseChinaIp(),
-                    ];
-                    $client_params['headers'] = $headers ?? [];
-                    $client_params['query'] = [
-                        'netType' => '01',
-                        'resourceType' => 'E',
-                        'songId' => $current_id,
-                        'toneFlag' => 'SQ',
-                        'dataType' => 2,
-                    ];
-                    $response2 = $client->request('GET', $get_url, $client_params);
-                    if ($response2->getStatusCode() == 200) {
-                        $body = $response2->getBody()->getContents();
-                        $body = json_decode($body, true);
-                        if (isset($body['code']) && $body['code'] == '000000' && isset($body['data'])) {
-                            $song_url = $body['data']['url'] ?? '';
-                        }
+            $headers = [
+                'referer' => 'http://music.migu.cn/v3/music/player/audio',
+                'channel' => '0146951',
+                'uid' => 1234,
+                'X-Real-IP' => $this->chooseChinaIp(),
+            ];
+            $client_params['headers'] = $headers ?? [];
+            $client_params['query'] = [
+                'netType' => '01',
+                'resourceType' => 'E',
+                'songId' => $current_id,
+                'toneFlag' => 'SQ',
+                'dataType' => 2,
+            ];
+            $response2 = $client->request('GET', $get_url, $client_params);
+            if ($response2->getStatusCode() == 200) {
+                $body = $response2->getBody()->getContents();
+                $body = json_decode($body, true);
+                if (isset($body['code']) && $body['code'] == '000000' && isset($body['data'])) {
+                    $song_url = $body['data']['url'] ?? '';
+                }
 //                            if (isset($body['returnCode']) && $body['returnCode'] == '000000' && isset($body['data'])) {
 //                                $song_url = $body['data']['playUrl'] ?? '';
 ////                                if (! empty($song_url)) {
 ////                                    break;
 ////                                }
 //                            }
-                    }
-//                    }
-                }
             }
+//                    }
         }
 
         return [$song_url, $song_size];
@@ -680,16 +774,33 @@ class SongsController extends AbstractController
 
     /**
      * qq源.
+     * @param $id
      * @param $name
      * @param $ar_name
+     * @param $data
+     * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @return array
      */
-    public function getQQ($name, $ar_name)
+    public function getQQ($id, $name, $ar_name, $data)
     {
         $song_url = '';
         $song_size = 0;
-        if (! empty($name)) {
+        $song_id = [];
+
+        $headers = [
+            'accept' => 'application/json, text/plain, */*',
+            'accept-encoding' => 'gzip, deflate',
+            'accept-language' => 'zh-CN,zh;q=0.9',
+            'user-agent' => $this->chooseUserAgent('pc'),
+            'X-Real-IP' => $this->chooseChinaIp(),
+        ];
+        $client = $this->clientFactory->create();
+        $client_params['headers'] = $headers ?? [];
+
+        if (! empty($data) && count($data) > 0) {
+            $song_id = $data;
+        } elseif (! empty($name)) {
             $key = urlencode(trim($name . ' ' . $ar_name));
 
             //search
@@ -700,15 +811,6 @@ class SongsController extends AbstractController
                 'flag_qc=0&p=1&n=20&w=' . $key .
                 '&g_tk=5381&jsonpCallback=MusicJsonCallback10005317669353331&loginUin=0&hostUin=0&' .
                 'format=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0';
-            $headers = [
-                'accept' => 'application/json, text/plain, */*',
-                'accept-encoding' => 'gzip, deflate',
-                'accept-language' => 'zh-CN,zh;q=0.9',
-                'user-agent' => $this->chooseUserAgent('pc'),
-                'X-Real-IP' => $this->chooseChinaIp(),
-            ];
-            $client = $this->clientFactory->create();
-            $client_params['headers'] = $headers ?? [];
             $response = $client->request('GET', $search_url, $client_params);
             if ($response->getStatusCode() == 200) {
                 $body = $response->getBody()->getContents();
@@ -718,43 +820,45 @@ class SongsController extends AbstractController
                 } else {
                     $body_array = [];
                 }
-                $song_id = [];
                 if (isset($body_array['data']['song']['list'])) {
                     foreach ($body_array['data']['song']['list'] as $song) {
                         if (mb_strpos($song['name'], $name) !== false) {
                             $song_id['song'] = $song['mid'];
                             $song_id['key'] = $song_id['file'] = $song['file']['media_mid'];
+                            if (count($song_id) > 0) {
+                                Db::table('songs')->where('m_id', $id)->update(['qq' => json_encode($song_id)]);
+                            }
                             break;
                         }
                     }
                 }
-                if (count($song_id) > 0) {
-                    //TODO:用cookie
-                    $data['req_0'] = [
-                        'module' => 'vkey.GetVkeyServer',
-                        'method' => 'CgiGetVkey',
-                        'param' => [
-                            'guid' => '7332953645',
-                            'loginflag' => 1,
-                            'filename' => ['M500' . $song_id['file'] . '.mp3'],
-                            //                            'filename' => ['M800' . $song_id['file'] . '.mp3'],
-                            'songmid' => [$song_id['song']],
-                            'songtype' => [0],
-                            'uin' => '0',
-                            'platform' => '20',
-                        ],
-                    ];
-                    //get url
-                    $get_url = 'https://u.y.qq.com/cgi-bin/musicu.fcg?data=' . urlencode(json_encode($data));
-                    $response2 = $client->request('GET', $get_url, $client_params);
-                    if ($response2->getStatusCode() == 200) {
-                        $body = $response2->getBody()->getContents();
-                        $body = json_decode($body, true);
-                        $purl = $body['req_0']['data']['midurlinfo'][0]['purl'] ?? '';
-                        if (! empty($purl)) {
-                            $song_url = $body['req_0']['data']['sip'][0] . $purl;
-                        }
-                    }
+            }
+        }
+        if (count($song_id) > 0) {
+            //TODO:用cookie
+            $data['req_0'] = [
+                'module' => 'vkey.GetVkeyServer',
+                'method' => 'CgiGetVkey',
+                'param' => [
+                    'guid' => '7332953645',
+                    'loginflag' => 1,
+                    'filename' => ['M500' . $song_id['file'] . '.mp3'],
+                    //                            'filename' => ['M800' . $song_id['file'] . '.mp3'],
+                    'songmid' => [$song_id['song']],
+                    'songtype' => [0],
+                    'uin' => '0',
+                    'platform' => '20',
+                ],
+            ];
+            //get url
+            $get_url = 'https://u.y.qq.com/cgi-bin/musicu.fcg?data=' . urlencode(json_encode($data));
+            $response2 = $client->request('GET', $get_url, $client_params);
+            if ($response2->getStatusCode() == 200) {
+                $body = $response2->getBody()->getContents();
+                $body = json_decode($body, true);
+                $purl = $body['req_0']['data']['midurlinfo'][0]['purl'] ?? '';
+                if (! empty($purl)) {
+                    $song_url = $body['req_0']['data']['sip'][0] . $purl;
                 }
             }
         }
