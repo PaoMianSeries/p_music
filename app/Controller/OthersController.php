@@ -11,6 +11,8 @@ declare(strict_types=1);
  */
 namespace App\Controller;
 
+use Carbon\Carbon;
+
 class OthersController extends AbstractController
 {
     /**
@@ -26,7 +28,7 @@ class OthersController extends AbstractController
 
         return $this->createCloudRequest(
             'POST',
-            'http://music.163.com/weapi/act/hot',
+            'https://music.163.com/api/act/hot',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
@@ -57,7 +59,7 @@ class OthersController extends AbstractController
         $data['count'] = $this->request->input('count', 1);
         return $this->createCloudRequest(
             'POST',
-            'http://music.163.com/weapi/playmode/intelligence/list',
+            'https://music.163.com/weapi/playmode/intelligence/list',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
@@ -90,7 +92,7 @@ class OthersController extends AbstractController
             'POST',
             'https://music.163.com/api/song/lyric',
             $data,
-            ['crypto' => 'linuxapi', 'cookie' => $cookie]
+            ['crypto' => 'api', 'cookie' => $cookie]
         );
     }
 
@@ -120,7 +122,7 @@ class OthersController extends AbstractController
             'POST',
             'https://music.163.com/api/v2/banner/get',
             ['clientType' => $type],
-            ['crypto' => 'linuxapi']
+            ['crypto' => 'api']
         );
     }
 
@@ -237,7 +239,7 @@ class OthersController extends AbstractController
 
         return $this->createCloudRequest(
             'POST',
-            'http://music.163.com/eapi/batch',
+            'https://music.163.com/eapi/batch',
             $data,
             ['crypto' => 'eapi', 'url' => '/api/batch', 'cookie' => $this->request->getCookieParams()]
         );
@@ -254,9 +256,94 @@ class OthersController extends AbstractController
         $data = [];
         return $this->createCloudRequest(
             'POST',
-            'http://interface3.music.163.com/eapi/lbs/countries/v1',
+            'https://interface3.music.163.com/eapi/lbs/countries/v1',
             $data,
             ['crypto' => 'eapi', 'url' => '/api/lbs/countries/v1', 'cookie' => $this->request->getCookieParams()]
+        );
+    }
+
+    /**
+     * 音乐日历.
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function calendar()
+    {
+        $data['startTime'] = $this->request->input('startTime', Carbon::now()->timestamp . '000');
+        $data['endTime'] = $this->request->input('endTime', Carbon::now()->timestamp . '000');
+        return $this->createCloudRequest(
+            'POST',
+            'https://music.163.com/api/mcalendar/detail',
+            $data,
+            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+        );
+    }
+
+    /**
+     * 收藏的专栏.
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function topicSubList()
+    {
+        $data['limit'] = $this->request->input('limit', 50);
+        $data['offset'] = $this->request->input('offset', 0);
+        $data['total'] = true;
+
+        return $this->createCloudRequest(
+            'POST',
+            'https://music.163.com/api/topic/sublist',
+            $data,
+            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+        );
+    }
+
+    public function cloud()
+    {
+        if ($this->request->file('songFile')->isValid()) {
+            $file = $this->request->file('songFile');
+        //TODO:缺少读取音乐文件信息的轮子
+        } else {
+            return $this->response->json([
+                'msg' => '请上传音乐文件',
+                'code' => 500,
+            ])->withStatus(500);
+        }
+    }
+
+    /**
+     * 获取话题详情.
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function topicDetail()
+    {
+        $data['actid'] = $this->request->input('actid');
+        return $this->createCloudRequest(
+            'POST',
+            'https://music.163.com/api/act/detail',
+            $data,
+            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+        );
+    }
+
+    /**
+     * 获取话题详情热门动态
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function topicHotDetail()
+    {
+        $data['actid'] = $this->request->input('actid');
+        return $this->createCloudRequest(
+            'POST',
+            'https://music.163.com/api/act/event/hot',
+            $data,
+            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
     }
 }
