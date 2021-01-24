@@ -110,9 +110,10 @@ class UsersController extends AbstractController
         $data = $validator->validated();
         $data['limit'] = $data['limit'] ?? 30;
         $data['offset'] = $data['offset'] ?? 0;
+        $data['includeVideo'] = true;
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/weapi/user/playlist',
+            'https://music.163.com/api/user/playlist',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
@@ -230,6 +231,11 @@ class UsersController extends AbstractController
             $errorMessage = $validator->errors()->first();
             return $this->returnMsg(422, $errorMessage);
         }
+
+        $cookie = $this->request->getCookieParams();
+        $cookie['os'] = 'ios';
+        $cookie['appver'] = '8.0.0';
+
         $data = $validator->validated();
         $uid = $data['uid'];
         $data['getcounts'] = true;
@@ -240,9 +246,9 @@ class UsersController extends AbstractController
 
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/weapi/event/get/' . $uid,
+            'https://music.163.com/api/event/get/' . $uid,
             $data,
-            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+            ['crypto' => 'api', 'cookie' => $cookie]
         );
     }
 
@@ -366,7 +372,7 @@ class UsersController extends AbstractController
         $alg = $validator_data['alg'] ?? 'itembased';
         $time = $validator_data['time'] ?? 25;
         $data['trackId'] = $validator_data['id'];
-        $data['like'] = $validator_data['like'] == 'false' ? false : true;
+        $data['like'] = $this->commonUtils->toBoolean($validator_data['like']);
 
         return $this->createCloudRequest(
             'POST',
@@ -444,7 +450,7 @@ class UsersController extends AbstractController
 
         return $this->createCloudRequest(
             'POST',
-            'https://music.163.com/weapi/v1/cloud/get',
+            'https://music.163.com/api/v1/cloud/get',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
@@ -471,7 +477,7 @@ class UsersController extends AbstractController
 
         return $this->createCloudRequest(
             'POST',
-            'http://music.163.com/weapi/cloud/del',
+            'https://music.163.com/weapi/cloud/del',
             $data,
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
@@ -597,6 +603,38 @@ class UsersController extends AbstractController
         return $this->createCloudRequest(
             'POST',
             'https://music.163.com/weapi/user/level',
+            [],
+            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+        );
+    }
+
+    /**
+     * 获取用户绑定信息.
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function binding()
+    {
+        return $this->createCloudRequest(
+            'POST',
+            'https://music.163.com/api/v1/user/bindings/' . $this->request->input('uid'),
+            [],
+            ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
+        );
+    }
+
+    /**
+     * 获取账号信息.
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    public function account()
+    {
+        return $this->createCloudRequest(
+            'POST',
+            'https://music.163.com/api/nuser/account/get' . $this->request->input('uid'),
             [],
             ['crypto' => 'weapi', 'cookie' => $this->request->getCookieParams()]
         );
